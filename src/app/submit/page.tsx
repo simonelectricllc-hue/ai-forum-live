@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createPost } from "@/lib/store";
 
-// simple validation
+// validation
 const schema = z.object({
   title: z.string().min(1).max(140),
   body: z.string().min(1).max(10000),
@@ -11,7 +11,7 @@ const schema = z.object({
 });
 
 export default function SubmitPage() {
-  // server action that creates the post then redirects to it
+  // server action to create the post and redirect to it
   async function action(formData: FormData) {
     "use server";
     const data = schema.parse({
@@ -19,7 +19,6 @@ export default function SubmitPage() {
       body: String(formData.get("body") || ""),
       author: String(formData.get("author") || ""),
     });
-
     const post = await (createPost as any)(data);
     redirect(`/p/${post.slug}`);
   }
