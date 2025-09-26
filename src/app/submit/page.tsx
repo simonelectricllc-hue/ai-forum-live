@@ -1,57 +1,76 @@
 import Link from "next/link";
-import type { Metadata } from "next";
-import { notFound } from "next/navigation";
-import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { z } from "zod";
+import { createPost } from "@/lib/store";
 
-import { JSONLD } from "@/components/jsonld";
-import { getPost, addComment } from "@/lib/store";
+// simple validation
+const schema = z.object({
+  title: z.string().min(1).max(140),
+  body: z.string().min(1).max(10000),
+  author: z.string().optional(),
+});
 
-// make this route always render fresh (comments show right away)
-export const revalidate = 0;
+export default function SubmitPage() {
+  // server action that creates the post then redirects to it
+  async function action(formData: FormData) {
+    "use server";
+    const data = schema.parse({
+      title: String(formData.get("title") || ""),
+      body: String(formData.get("body") || ""),
+      author: String(formData.get("author") || ""),
+    });
 
-export async function generateMetadata({ params }: any): Promise<Metadata> {
-  const post = await (getPost as any)(params.slug);
-  if (!post) return { title: "Post not found" };
-  return {
-    title: post.title,
-    description: String(post.body || "").slice(0, 140),
-  };
-}
-
-// server action to create a comment
-async function commentAction(formData: FormData) {
-  "use server";
-  const slug = String(formData.get("slug") || "");
-  const body = String(formData.get("body") || "");
-  if (!slug || !body.trim()) return;
-
-  await (addComment as any)(slug, body);
-  revalidatePath(`/p/${slug}`);
-}
-
-export default async function PostPage({ params }: any) {
-  const slug = String(params?.slug || "");
-  const post = await (getPost as any)(slug);
-
-  if (!post) notFound();
-
-  const jsonld = {
-    "@context": "https://schema.org",
-    "@type": "DiscussionForumPosting",
-    headline: post.title,
-    datePublished: new Date(post.createdAt).toISOString(),
-    commentCount: (post.comments || []).length,
-  };
+    const post = await (createPost as any)(data);
+    redirect(`/p/${post.slug}`);
+  }
 
   return (
     <div className="mx-auto max-w-3xl p-4">
-      <JSONLD data={jsonld} />
-
       <Link href="/" className="text-sm text-gray-500 hover:underline">
         ← Back to posts
       </Link>
 
-      <article className="mt-3 rounded-xl border bg-white p-5 shadow-sm">
-        <h1 className="text-2xl font-semibold">{post.title}</h1>
-        <p className="mt-2 whitespace-pre-wrap leading-7">{post.body}</p>
-        <p className=
+      <h1 className="mt-3 text-2xl font-semibold">Create a post</h1>
+
+      <form action={action} className="mt-4 space-y-3 rounded-xl border bg-white p-5 shadow-sm">
+        <div>
+          <label className="block text-sm font-medium">Title</label>
+          <input
+            name="title"
+            required
+            minLength={1}
+            className="mt-1 w-full rounded-lg border p-2"
+            placeholder="What’s the topic?"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium">Body</label>
+          <textarea
+            name="body"
+            required
+            rows={8}
+            className="mt-1 w-full rounded-lg border p-2"
+            placeholder="Write your post…"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium">Author (optional)</label>
+          <input
+            name="author"
+            className="mt-1 w-full rounded-lg border p-2"
+            placeholder="Your name"
+          />
+        </div>
+
+        <button
+          type="submit"
+          className="rounded-lg border bg-black px-3 py-2 text-white hover:bg-gray-800"
+        >
+          Publish
+        </button>
+      </form>
+    </div>
+  );
+}
